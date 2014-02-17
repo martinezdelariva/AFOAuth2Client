@@ -20,8 +20,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#import "AFHTTPClient.h"
-
 #ifndef _SECURITY_SECITEM_H_
 #warning Security framework not found in project, or not included in precompiled header. Keychain persistence functionality will not be available.
 #endif
@@ -31,11 +29,11 @@
 /**
  `AFOAuth2Client` encapsulates common patterns to authenticate against a resource server conforming to the behavior outlined in the OAuth 2.0 specification.
  
- In your application, it is recommended that you use `AFOAuth2Client` exclusively to get an authorization token, which is then passed to another `AFHTTPClient` subclass.
+ In your application, it is recommended that you use `AFOAuth2Client` exclusively to get an authorization token, which is then passed to another `AFHTTPSessionManager` subclass.
  
  @see RFC 6749 The OAuth 2.0 Authorization Framework: http://tools.ietf.org/html/rfc6749
  */
-@interface AFOAuth2Client : AFHTTPClient
+@interface AFOAuth2Client : NSObject
 
 ///------------------------------------------
 /// @name Accessing OAuth 2 Client Properties
@@ -50,6 +48,11 @@
  The client identifier issued by the authorization server, uniquely representing the registration information provided by the client.
  */
 @property (readonly, nonatomic) NSString *clientID;
+
+/**
+ OAuth base URL.
+ */
+@property (readonly, nonatomic) NSURL *baseURL;
 
 ///------------------------------------------------
 /// @name Creating and Initializing OAuth 2 Clients
@@ -80,13 +83,6 @@
 - (id)initWithBaseURL:(NSURL *)url
              clientID:(NSString *)clientID
                secret:(NSString *)secret;
-
-/**
- Sets the "Authorization" HTTP header set in request objects made by the HTTP client to a basic authentication value with Base64-encoded username and password. This overwrites any existing value for this header.
-
- @param credential The OAuth credential
- */
-- (void)setAuthorizationHeaderWithCredential:(AFOAuthCredential *)credential;
 
 ///---------------------
 /// @name Authenticating

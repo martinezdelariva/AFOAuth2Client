@@ -20,7 +20,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-#import "AFJSONRequestOperation.h"
+#import "AFHTTPRequestOperation.h"
+#import "AFURLRequestSerialization.h"
 
 #import "AFOAuth2Client.h"
 
@@ -46,6 +47,7 @@ static NSMutableDictionary * AFKeychainQueryDictionaryWithIdentifier(NSString *i
 @property (readwrite, nonatomic) NSString *serviceProviderIdentifier;
 @property (readwrite, nonatomic) NSString *clientID;
 @property (readwrite, nonatomic) NSString *secret;
+@property (readwrite, nonatomic) NSURL *baseURL;
 @end
 
 @implementation AFOAuth2Client
@@ -63,38 +65,20 @@ static NSMutableDictionary * AFKeychainQueryDictionaryWithIdentifier(NSString *i
 {
     NSParameterAssert(clientID);
 
-    self = [super initWithBaseURL:url];
-    if (!self) {
-        return nil;
+    self = [super init];
+    if (self) {
+        // Ensure terminal slash for baseURL path, so that NSURL +URLWithString:relativeToURL: works as expected
+        if ([[url path] length] > 0 && ![[url absoluteString] hasSuffix:@"/"]) {
+            url = [url URLByAppendingPathComponent:@"/"];
+        }
+    
+        self.serviceProviderIdentifier = [url host];
+        self.baseURL = url;
+        self.clientID = clientID;
+        self.secret = secret;
     }
-
-    self.serviceProviderIdentifier = [self.baseURL host];
-    self.clientID = clientID;
-    self.secret = secret;
-
-    [self registerHTTPOperationClass:[AFJSONRequestOperation class]];
 
     return self;
-}
-
-#pragma mark -
-
-- (void)setAuthorizationHeaderWithToken:(NSString *)token {
-    // Use the "Bearer" type as an arbitrary default
-    [self setAuthorizationHeaderWithToken:token ofType:@"Bearer"];
-}
-
-- (void)setAuthorizationHeaderWithCredential:(AFOAuthCredential *)credential {
-    [self setAuthorizationHeaderWithToken:credential.accessToken ofType:credential.tokenType];
-}
-
-- (void)setAuthorizationHeaderWithToken:(NSString *)token
-                                 ofType:(NSString *)type
-{
-    // See http://tools.ietf.org/html/rfc6749#section-7.1
-    if ([[type lowercaseString] isEqualToString:@"bearer"]) {
-        [self setDefaultHeader:@"Authorization" value:[NSString stringWithFormat:@"Bearer %@", token]];
-    }
 }
 
 #pragma mark -
@@ -166,11 +150,22 @@ static NSMutableDictionary * AFKeychainQueryDictionaryWithIdentifier(NSString *i
     [mutableParameters setObject:self.clientID forKey:@"client_id"];
     [mutableParameters setValue:self.secret forKey:@"client_secret"];
     parameters = [NSDictionary dictionaryWithDictionary:mutableParameters];
-
-    NSMutableURLRequest *mutableRequest = [self requestWithMethod:@"POST" path:path parameters:parameters];
-    [mutableRequest setValue:@"application/json" forHTTPHeaderField:@"Accept"];
-
-    AFHTTPRequestOperation *requestOperation = [self HTTPRequestOperationWithRequest:mutableRequest success:^(AFHTTPRequestOperation *operation, id responseObject) {
+    
+    NSString *absoluteURLString = [[NSURL URLWithString:path relativeToURL:[self baseURL]] absoluteString];
+    
+    NSError *error;
+    NSMutableURLRequest *mutableRequest = [[AFHTTPRequestSerializer serializer] requestWithMethod:@"POST"
+                                                                                        URLString:absoluteURLString
+                                                                                       parameters:parameters
+                                                                                            error:&error];
+    if (error) {
+        failure(error);
+        return;
+    }
+    
+    AFHTTPRequestOperation *requestOperation = [[AFHTTPRequestOperation alloc] initWithRequest:mutableRequest];
+    [requestOperation setResponseSerializer:[AFJSONResponseSerializer serializer]];
+    [requestOperation setCompletionBlockWithSuccess:^(AFHTTPRequestOperation *operation, id responseObject) {
         if ([responseObject valueForKey:@"error"]) {
             if (failure) {
                 // TODO: Resolve the `error` field into a proper NSError object
@@ -196,8 +191,6 @@ static NSMutableDictionary * AFKeychainQueryDictionaryWithIdentifier(NSString *i
 
         [credential setRefreshToken:refreshToken expiration:expireDate];
 
-        [self setAuthorizationHeaderWithCredential:credential];
-
         if (success) {
             success(credential);
         }
@@ -207,7 +200,7 @@ static NSMutableDictionary * AFKeychainQueryDictionaryWithIdentifier(NSString *i
         }
     }];
 
-    [self enqueueHTTPRequestOperation:requestOperation];
+    [requestOperation start];
 }
 
 @end
@@ -271,7 +264,7 @@ static NSMutableDictionary * AFKeychainQueryDictionaryWithIdentifier(NSString *i
 
 #ifdef _SECURITY_SECITEM_H_
 
-+ (BOOL)storeCredential:(AFOAuth1Token *)credential
++ (BOOL)storeCredential:(AFOAuthCredential *)credential
          withIdentifier:(NSString *)identifier
 {
     id securityAccessibility = nil;

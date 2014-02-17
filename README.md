@@ -1,3 +1,10 @@
+# NOTE
+
+This fork has the following mayor changes:
+- `AFOAuth2Client` inherit from `NSObject`, and not from `AFHTTPClient`.
+- Use AFNetworking 2.
+
+
 # AFOAuth2Client
 
 AFOAuth2Client is an extension for [AFNetworking](http://github.com/AFNetworking/AFNetworking/) that greatly simplifies the process of authenticating against an [OAuth 2](http://oauth.net/2/) provider.
